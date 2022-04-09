@@ -1,60 +1,99 @@
-import React, { Component } from 'react';
-import PostListContract from './contracts/PostList.json';
-import getWeb3 from './getWeb3';
+import React, { useState, useEffect } from 'react';
+import { useSelector } from 'react-redux';
+import { init, fetchPosts, createPost } from 'redux/post';
+import { Box, Button, Card, CircularProgress, Container, TextField, Typography } from '@mui/material';
+import { createTheme, ThemeProvider } from '@mui/material/styles';
 
-import './App.css';
+const theme = createTheme({ typography: { fontSize: 10 } });
 
-class App extends Component {
-	state = { storageValue: {}, web3: null, accounts: null, contract: null };
+export const App = () => {
+	const contract = useSelector((state) => state.post.contract);
+	const loading = useSelector((state) => state.post.loading);
+	const loadingPosts = useSelector((state) => state.post.loadingPosts);
+	const posts = useSelector((state) => state.post.posts);
 
-	componentDidMount = async () => {
-		try {
-			// Get network provider and web3 instance.
-			const web3 = await getWeb3();
+	const [author, setAuthor] = useState('');
+	const [body, setBody] = useState('');
 
-			// Use web3 to get the user's accounts.
-			const accounts = await web3.eth.getAccounts();
+	useEffect(() => {
+		init();
+	}, []);
 
-			// Get the contract instance.
-			const networkId = await web3.eth.net.getId();
-			const deployedNetwork = PostListContract.networks[networkId];
-			const instance = new web3.eth.Contract(PostListContract.abi, deployedNetwork && deployedNetwork.address);
+	useEffect(() => {
+		fetchPosts();
+	}, [loading, contract]);
 
-			// Set web3, accounts, and contract to the state, and then proceed with an
-			// example of interacting with the contract's methods.
-			this.setState({ web3, accounts, contract: instance }, this.runExample);
-		} catch (error) {
-			// Catch any errors for any of the above operations.
-			alert(`Failed to load web3, accounts, or contract. Check console for details.`);
-			console.error(error);
-		}
+	const handleCreatePost = async (e) => {
+		e.preventDefault();
+
+		if (!loading && contract.methods) {
+			createPost(author, body);
+			setAuthor('');
+			setBody('');
+		} else console.log('No create method found');
 	};
 
-	runExample = async () => {
-		const { accounts, contract } = this.state;
-
-		// Stores a given value, 5 by default.
-		await contract.methods.createPost('John Doe', 'barfoo').send({ from: accounts[0] });
-
-		// Get the value from the contract to prove it worked.
-		const response = await contract.methods.posts(1).call();
-
-		// Update state with the result.
-		this.setState({ storageValue: response });
-	};
-
-	render() {
-		if (!this.state.web3) {
-			return <div>Loading Web3, accounts, and contract...</div>;
-		}
-		return (
-			<div className='App'>
-				<h3>Stored post:</h3>
-				<p>{this.state.storageValue.author}</p>
-				<p>{this.state.storageValue.body}</p>
-			</div>
-		);
-	}
-}
-
-export default App;
+	return (
+		<ThemeProvider theme={theme}>
+			<Container
+				className='app'
+				maxWidth='sm'
+				sx={{
+					fontSize: 3,
+					padding: 4,
+				}}
+			>
+				{loading ? (
+					<CircularProgress />
+				) : (
+					<>
+						<form onSubmit={handleCreatePost}>
+							<Box>
+								<TextField
+									label='Author'
+									variant='outlined'
+									fullWidth
+									value={author}
+									onChange={(e) => setAuthor(e.target.value)}
+									sx={{ marginBottom: 1 }}
+								></TextField>
+								<TextField
+									label='Post'
+									variant='outlined'
+									multiline
+									minRows={4}
+									fullWidth
+									value={body}
+									onChange={(e) => setBody(e.target.value)}
+									sx={{ marginBottom: 1 }}
+								/>
+								<Button
+									type='submit'
+									variant='contained'
+									color='primary'
+									fullWidth
+									sx={{ marginBottom: 2 }}
+								>
+									Post
+								</Button>
+							</Box>
+						</form>
+						{loadingPosts ? (
+							<CircularProgress />
+						) : (
+							posts
+								?.slice(0)
+								.reverse()
+								.map((post, key) => (
+									<Card sx={{ padding: 2, marginBottom: 1 }} key={key}>
+										<Typography variant='h6'>{post[1]}</Typography>
+										<Typography variant='body1'>{post[2]}</Typography>
+									</Card>
+								))
+						)}
+					</>
+				)}
+			</Container>
+		</ThemeProvider>
+	);
+};
